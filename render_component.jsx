@@ -1,170 +1,196 @@
-// create-experiment.jsx
-// ---------------------
-// This version removes the earlier navigate(-1) logic
-// and drives the wizard step using a URL query param (?step=<index>).
+'use client'; // ✅ REQUIRED in Next.js App Router for components that use hooks or navigation
 
-import React from "react";
-import {
-  Box,
-  Button,
-  Step,
-  StepLabel,
-  Stepper,
-  Typography,
-  Paper,
-} from "@mui/material";
-// NEW: useSearchParams to read/write the step in the URL
-import { useSearchParams } from "react-router-dom";
+import React, { useState } from "react";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import CardContent from "@mui/material/CardContent";
+import Card from "@mui/material/Card";
+import Stack from "@mui/material/Stack";
+import Grid from "@mui/material/Grid";
+import Typography from "@mui/material/Typography";
+import CircularProgress from "@mui/material/CircularProgress";
+import ErrorIcon from "@mui/icons-material/Error";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ReviewExperiment from "./review-experiment";
+import { useExperimentMutations } from "@hooks/useExperimentMutations";
+import { ArrowLeft as ArrowLeftIcon } from "@phosphor-icons/react/dist/ssr/ArrowLeft";
+import { useOrgProjectsContext } from "@context/orgProjectsContext";
 
-// Optional: use your existing icons
-import ArrowLeftIcon from "@mui/icons-material/ArrowLeft";
+// ❌ REMOVED: react-router-dom navigate (does nothing in Next.js App Router)
+// import { useNavigate } from "react-router-dom";
 
-// Wizard step labels (adjust text if needed)
-const STEP_LABELS = [
-  "CHOOSE PLATFORM",
-  "SELECT AN ENVIRONMENT",
-  "CHOOSE EXPERIMENT BASED ON RESOURCE TYPE",
-  "PROVIDE EXPERIMENT PARAMETERS",
-  "REVIEW EXPERIMENT",
-];
+// ✅ ADDED: Next.js navigation hook
+import { useRouter } from "next/navigation";
 
-export default function CreateExperiment() {
-  // NEW: read and control step from the URL (`/dashboard/experiments/create?step=4`)
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeStep = Number(searchParams.get("step") ?? 0); // default to 0
+export function CreateExperiment({
+  onBack,      // parent-controlled stepper back handler (optional)
+  resetForm,   // clears the wizard to start a new experiment
+  formdata,    // all collected values from previous steps
+}) {
+  // ❌ REMOVED: const navigate = useNavigate();
+  // ✅ ADDED: Next.js router
+  const router = useRouter();
 
-  // NEW: helper to jump to any step and keep the URL in sync
-  const goToStep = (i) => setSearchParams({ step: String(i) });
+  const { createMutation } = useExperimentMutations();
+  const { selectedProject } = useOrgProjectsContext();
 
-  // Convenience helpers (use in your step actions if you like)
-  const goNext = () => goToStep(Math.min(activeStep + 1, STEP_LABELS.length - 1));
-  const goBack = () => goToStep(Math.max(activeStep - 1, 0));
+  const [createstatus, setcreatestatus] = useState<"creating" | null>(null);
 
-  return (
-    <Box sx={{ p: 2 }}>
-      <Typography variant="h4" gutterBottom>
-        Create Chaos Experiment
-      </Typography>
+  // Keep your mutation flags
+  const {
+    data: createData,
+    isPending: isCreatePending,
+    isSuccess: isCreateSuccess,
+    isError: isCreateError,
+    error: createError,
+  } = createMutation;
 
-      <Paper elevation={0} sx={{ p: 2, mb: 3 }}>
-        <Stepper activeStep={activeStep} orientation="vertical">
-          {STEP_LABELS.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-      </Paper>
+  // Build parameters/payload exactly as before
+  const parameters = {
+    platform: formdata.platform,
+    clusterName: formdata.parameters.clusterName,
+    resources: Array.isArray(formdata.parameters?.resources)
+      ? formdata.parameters.resources.map((resource: string) => ({
+          namespace: formdata.parameters.namespace,
+          pod_name: resource,
+        }))
+      : [],
+  };
 
-      {/* STEP 1: Choose Platform */}
-      {activeStep === 0 && (
-        <Box>
-          {/* Replace this with your existing Step-1 component */}
-          {/* e.g. <ChoosePlatform onNext={() => goToStep(1)} /> */}
-          <Typography sx={{ mb: 2 }}>
-            Step 1 content (Choose Platform) goes here.
-          </Typography>
-          <Button variant="contained" onClick={() => goToStep(1)}>
-            Next
-          </Button>
-        </Box>
-      )}
+  const payload = {
+    name: formdata.experimentName,
+    action: formdata.experimentType,
+    description: formdata.experimentDescription,
+    project: selectedProject,
+    environment_id: formdata.envId,
+    created_by: 43226675,
+    parameters,
+    grace_period: 5,
+    propagation_policy: "Background",
+  };
 
-      {/* STEP 2: Select Environment */}
-      {activeStep === 1 && (
-        <Box>
-          {/* Replace with your existing Step-2 component */}
-          {/* e.g. <SelectEnvironment onBack={() => goToStep(0)} onNext={() => goToStep(2)} /> */}
-          <Typography sx={{ mb: 2 }}>
-            Step 2 content (Select Environment) goes here.
-          </Typography>
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <Button variant="outlined" onClick={() => goToStep(0)}>
-              Back
-            </Button>
-            <Button variant="contained" onClick={() => goToStep(2)}>
-              Next
-            </Button>
-          </Box>
-        </Box>
-      )}
+  // ✅ UPDATED: prevent default submit (important because this component is wrapped in <form>)
+  const handleCreateExperiment = async (e?: React.FormEvent) => {
+    e?.preventDefault?.();
+    try {
+      setcreatestatus("creating");
+      await createMutation.mutateAsync({ payload });
+    } catch (error) {
+      console.error("Error creating experiment:", error);
+    }
+  };
 
-      {/* STEP 3: Choose experiment by resource type */}
-      {activeStep === 2 && (
-        <Box>
-          {/* Replace with your existing Step-3 component */}
-          {/* e.g. <ChooseExperimentType onBack={() => goToStep(1)} onNext={() => goToStep(3)} /> */}
-          <Typography sx={{ mb: 2 }}>
-            Step 3 content (Choose Experiment by Resource Type) goes here.
-          </Typography>
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <Button variant="outlined" onClick={() => goToStep(1)}>
-              Back
-            </Button>
-            <Button variant="contained" onClick={() => goToStep(3)}>
-              Next
-            </Button>
-          </Box>
-        </Box>
-      )}
-
-      {/* STEP 4: Provide experiment parameters */}
-      {activeStep === 3 && (
-        <Box>
-          {/* Replace with your existing Step-4 component */}
-          {/* e.g. <ProvideExperimentParams onBack={() => goToStep(2)} onReview={() => goToStep(4)} /> */}
-          <Typography sx={{ mb: 2 }}>
-            Step 4 content (Provide Experiment Parameters) goes here.
-          </Typography>
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <Button variant="outlined" onClick={() => goToStep(2)}>
-              Back
-            </Button>
-            {/* IMPORTANT: this is where you previously sent users to the review screen */}
-            <Button variant="contained" onClick={() => goToStep(4)}>
-              Review Experiment
-            </Button>
-          </Box>
-        </Box>
-      )}
-
-      {/* STEP 5: Review experiment (final screen shown in your screenshot) */}
-      {activeStep === 4 && (
-        <ReviewExperiment goToStep={goToStep} />
-      )}
-    </Box>
-  );
-}
-
-/**
- * Review step panel (inline here for clarity).
- * If you already have a dedicated review component file, you can delete this
- * component and import yours instead — just remember to pass `goToStep`.
- */
-function ReviewExperiment({ goToStep }) {
-  return (
-    <Box>
-      <Typography variant="h5" gutterBottom>
-        Review Experiment
-      </Typography>
-
-      {/* Render your review summary/details here (platform, env, params, selections, etc.) */}
-
-      <Box sx={{ display: "flex", gap: 1, mt: 2 }}>
-        {/* NEW: Back goes deterministically to Step 4 (index 3) */}
-        <Button
-          variant="outlined"
-          startIcon={<ArrowLeftIcon />}
-          onClick={() => goToStep(3)} // <-- This replaces the old navigate(-1) code
+  // Loading / error / success UIs unchanged except navigation fix
+  if (isCreatePending) {
+    return (
+      <Box display="flex" alignItems="center" gap={1}>
+        <Alert
+          severity="info"
+          icon={<CircularProgress size={20} color="inherit" />}
         >
-          Back
-        </Button>
-
-        {/* Keep your Create/Submit handler as-is */}
-        <Button variant="contained" color="primary">
-          Create Experiment
-        </Button>
+          <Typography color="primary">
+            Creating your experiment, please wait...
+          </Typography>
+        </Alert>
       </Box>
-    </Box>
+    );
+  }
+
+  if (isCreateError) {
+    return (
+      <Box display="flex" alignItems="center" gap={1}>
+        <Alert severity="error" icon={<ErrorIcon />}>
+          <Typography color="error">
+            Failed to create the experiment. Error:{" "}
+            {(createError as any)?.response?.data?.detail ||
+              (createError as Error).message}
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
+
+  if (isCreateSuccess) {
+    return (
+      <Stack spacing={4}>
+        <Box display="flex" flexDirection="column" alignItems="left" gap={2}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Alert
+              severity="success"
+              icon={
+                <CheckCircleIcon
+                  fontSize="inherit"
+                  style={{ color: "green" }}
+                />
+              }
+            >
+              <Typography color="success">
+                Experiment ID {createData?.data?.experiment_code || "N/A"} is
+                created successfully.
+              </Typography>
+            </Alert>
+          </Box>
+        </Box>
+        <Stack spacing={2} direction="row">
+          <Button onClick={resetForm} color="info" variant="outlined">
+            Create another experiment
+          </Button>
+
+          {/* ✅ UPDATED: Next.js navigation to execute page */}
+          <Button
+            onClick={() => router.push("/dashboard/experiments/execute")}
+            color="primary"
+            variant="contained"
+          >
+            Navigate to the execute page
+          </Button>
+        </Stack>
+      </Stack>
+    );
+  }
+
+  return (
+    <form onSubmit={handleCreateExperiment}>
+      <Stack spacing={3}>
+        <Card>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <ReviewExperiment formdata={formdata} />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
+        <Stack spacing={2} direction="row">
+          {/* ✅ UPDATED: 
+              - type="button" so it doesn't submit the form
+              - onClick uses parent onBack if provided (stepper case),
+                otherwise falls back to a route push back to Screen 1.
+              - You can use router.back() if you prefer browser history. */}
+          <Button
+            variant="outlined"
+            startIcon={<ArrowLeftIcon />}
+            type="button"
+            onClick={() => {
+              if (onBack) {
+                onBack(); // go to previous step within the same page
+              } else {
+                router.push("/dashboard/experiments/create"); // go to Screen 1 route
+                // or: router.back();
+              }
+            }}
+          >
+            Back
+          </Button>
+
+          {/* ✅ Keep submit for create */}
+          <Button type="submit" variant="contained" color="primary">
+            Create Experiment
+          </Button>
+        </Stack>
+      </Stack>
+    </form>
   );
 }
