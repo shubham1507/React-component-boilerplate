@@ -1,5 +1,3 @@
-'use client'; // ✅ REQUIRED in Next.js App Router for components that use hooks or navigation
-
 import React, { useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
@@ -17,27 +15,19 @@ import { useExperimentMutations } from "@hooks/useExperimentMutations";
 import { ArrowLeft as ArrowLeftIcon } from "@phosphor-icons/react/dist/ssr/ArrowLeft";
 import { useOrgProjectsContext } from "@context/orgProjectsContext";
 
-// ❌ REMOVED: react-router-dom navigate (does nothing in Next.js App Router)
-// import { useNavigate } from "react-router-dom";
+// ✅ Use react-router-dom navigation (your existing stack)
+import { useNavigate } from "react-router-dom";
 
-// ✅ ADDED: Next.js navigation hook
-import { useRouter } from "next/navigation";
-
-export function CreateExperiment({
-  onBack,      // parent-controlled stepper back handler (optional)
-  resetForm,   // clears the wizard to start a new experiment
-  formdata,    // all collected values from previous steps
-}) {
-  // ❌ REMOVED: const navigate = useNavigate();
-  // ✅ ADDED: Next.js router
-  const router = useRouter();
+export function CreateExperiment({ onBack, resetForm, formdata }) {
+  // ✅ create navigate instance (was missing earlier where navigate(...) was used)
+  const navigate = useNavigate();
 
   const { createMutation } = useExperimentMutations();
   const { selectedProject } = useOrgProjectsContext();
 
-  const [createstatus, setcreatestatus] = useState<"creating" | null>(null);
+  const [createstatus, setcreatestatus] = useState(null);
 
-  // Keep your mutation flags
+  // Keep mutation flags as-is
   const {
     data: createData,
     isPending: isCreatePending,
@@ -46,12 +36,12 @@ export function CreateExperiment({
     error: createError,
   } = createMutation;
 
-  // Build parameters/payload exactly as before
+  // Build parameters/payload exactly like before
   const parameters = {
     platform: formdata.platform,
     clusterName: formdata.parameters.clusterName,
     resources: Array.isArray(formdata.parameters?.resources)
-      ? formdata.parameters.resources.map((resource: string) => ({
+      ? formdata.parameters.resources.map((resource) => ({
           namespace: formdata.parameters.namespace,
           pod_name: resource,
         }))
@@ -70,8 +60,8 @@ export function CreateExperiment({
     propagation_policy: "Background",
   };
 
-  // ✅ UPDATED: prevent default submit (important because this component is wrapped in <form>)
-  const handleCreateExperiment = async (e?: React.FormEvent) => {
+  // ✅ prevent default so the page doesn't reload when form submits
+  const handleCreateExperiment = async (e) => {
     e?.preventDefault?.();
     try {
       setcreatestatus("creating");
@@ -81,17 +71,11 @@ export function CreateExperiment({
     }
   };
 
-  // Loading / error / success UIs unchanged except navigation fix
   if (isCreatePending) {
     return (
       <Box display="flex" alignItems="center" gap={1}>
-        <Alert
-          severity="info"
-          icon={<CircularProgress size={20} color="inherit" />}
-        >
-          <Typography color="primary">
-            Creating your experiment, please wait...
-          </Typography>
+        <Alert severity="info" icon={<CircularProgress size={20} color="inherit" />}>
+          <Typography color="primary">Creating your experiment, please wait...</Typography>
         </Alert>
       </Box>
     );
@@ -103,8 +87,7 @@ export function CreateExperiment({
         <Alert severity="error" icon={<ErrorIcon />}>
           <Typography color="error">
             Failed to create the experiment. Error:{" "}
-            {(createError as any)?.response?.data?.detail ||
-              (createError as Error).message}
+            {createError?.response?.data?.detail || createError.message}
           </Typography>
         </Alert>
       </Box>
@@ -118,16 +101,10 @@ export function CreateExperiment({
           <Box display="flex" alignItems="center" gap={1}>
             <Alert
               severity="success"
-              icon={
-                <CheckCircleIcon
-                  fontSize="inherit"
-                  style={{ color: "green" }}
-                />
-              }
+              icon={<CheckCircleIcon fontSize="inherit" style={{ color: "green" }} />}
             >
               <Typography color="success">
-                Experiment ID {createData?.data?.experiment_code || "N/A"} is
-                created successfully.
+                Experiment ID {createData?.data?.experiment_code || "N/A"} is created successfully.
               </Typography>
             </Alert>
           </Box>
@@ -137,9 +114,9 @@ export function CreateExperiment({
             Create another experiment
           </Button>
 
-          {/* ✅ UPDATED: Next.js navigation to execute page */}
+          {/* ✅ use react-router-dom navigate (not Next.js) */}
           <Button
-            onClick={() => router.push("/dashboard/experiments/execute")}
+            onClick={() => navigate("/dashboard/experiments/execute")}
             color="primary"
             variant="contained"
           >
@@ -164,28 +141,28 @@ export function CreateExperiment({
         </Card>
 
         <Stack spacing={2} direction="row">
-          {/* ✅ UPDATED: 
-              - type="button" so it doesn't submit the form
-              - onClick uses parent onBack if provided (stepper case),
-                otherwise falls back to a route push back to Screen 1.
-              - You can use router.back() if you prefer browser history. */}
+          {/* ✅ Back button now works:
+                 - type="button" so it doesn't submit the form
+                 - prefers parent-provided onBack (stepper case)
+                 - otherwise fallback: go to Screen 1 route
+                 - you can swap to navigate(-1) if you prefer history back */}
           <Button
             variant="outlined"
             startIcon={<ArrowLeftIcon />}
             type="button"
             onClick={() => {
               if (onBack) {
-                onBack(); // go to previous step within the same page
+                onBack(); // parent will set previous step
               } else {
-                router.push("/dashboard/experiments/create"); // go to Screen 1 route
-                // or: router.back();
+                navigate("/dashboard/experiments/create"); // go to screen 1
+                // or: navigate(-1); // browser back
               }
             }}
           >
             Back
           </Button>
 
-          {/* ✅ Keep submit for create */}
+          {/* Submit creates the experiment */}
           <Button type="submit" variant="contained" color="primary">
             Create Experiment
           </Button>
